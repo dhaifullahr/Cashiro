@@ -51,7 +51,10 @@ object CurrencyFormatter {
         "HUF" to Locale("hu", "HU"),
         "ILS" to Locale("he", "IL"),
         "PHP" to Locale("en", "PH"),
-        "IDR" to Locale("in", "ID"),
+
+        // FIXED
+        "IDR" to Locale("id", "ID"),
+
         "SAR" to Locale("ar", "SA"),
         "COP" to Locale("es", "CO"),
         "KES" to Locale("sw", "KE")
@@ -64,86 +67,89 @@ object CurrencyFormatter {
      */
     fun formatCurrency(amount: BigDecimal, currencyCode: String = "INR"): String {
         return try {
-            val locale = CURRENCY_LOCALES[currencyCode] ?: if (currencyCode == "INR" || currencyCode == "NPR") INDIAN_LOCALE else DEFAULT_LOCALE
+            val locale = CURRENCY_LOCALES[currencyCode] ?: DEFAULT_LOCALE
             val formatter = NumberFormat.getCurrencyInstance(locale)
-            
-            // Get our custom symbol
+
+            // Get custom symbol
             val customSymbol = CurrencySymbols.getSymbol(currencyCode)
 
-            // Configure formatting rules
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 2
- 
-            // Set the currency if supported
+
             try {
                 formatter.currency = Currency.getInstance(currencyCode)
             } catch (e: Exception) {
-                // If currency not supported, use symbol mapping
-                return "$customSymbol${formatAmount(amount)}"
+                return "$customSymbol${formatAmount(amount, currencyCode)}"
             }
- 
+
             val formatted = formatter.format(amount)
-            
-            // If the formatted string doesn't contain our custom symbol, or contains the ISO code,
-            // we override it to ensure the custom symbol is used.
+
             if (formatted.contains(currencyCode) || !formatted.contains(customSymbol)) {
                 val cleanAmount = formatAmount(amount, currencyCode)
-                return if (locale == Locale.US || locale == INDIAN_LOCALE || locale == Locale.UK) {
+
+                return if (
+                    locale == Locale.US ||
+                    locale == Locale.UK ||
+                    locale == INDIAN_LOCALE
+                ) {
                     "$customSymbol$cleanAmount"
                 } else {
                     "$cleanAmount $customSymbol"
                 }
             }
-            
+
             formatted
         } catch (e: Exception) {
-            // Fallback to symbol + amount
             val symbol = CurrencySymbols.getSymbol(currencyCode)
             "$symbol${formatAmount(amount, currencyCode)}"
         }
     }
 
     /**
-     * Formats a Double amount as currency with the specified currency code
+     * Formats a Double amount as currency
      */
     fun formatCurrency(amount: Double, currencyCode: String = "INR"): String {
         return formatCurrency(amount.toBigDecimal(), currencyCode)
     }
 
     /**
-     * Formats an amount with proper grouping and decimals
-     * Uses Indian grouping (#,##,##0.00) for INR and NPR, standard (#,###.00) otherwise
+     * Formats amount with standard international grouping
+     * Example:
+     * 278000 -> 278,000.00
      */
     fun formatAmount(amount: BigDecimal, currencyCode: String = "INR"): String {
-        val locale = CURRENCY_LOCALES[currencyCode] ?: if (currencyCode == "INR" || currencyCode == "NPR") INDIAN_LOCALE else DEFAULT_LOCALE
-        val pattern = if (currencyCode == "INR" || currencyCode == "NPR") "#,##,##0.00" else "#,###.00"
+
+        val locale = CURRENCY_LOCALES[currencyCode] ?: DEFAULT_LOCALE
+
+        // FIXED FORMAT
+        val pattern = "#,###.00"
+
         val symbols = DecimalFormatSymbols(locale)
         val formatter = DecimalFormat(pattern, symbols)
+
         return formatter.format(amount)
     }
 
     /**
-     * Formats a double amount with proper grouping and decimals
+     * Formats double amount
      */
     fun formatAmount(amount: Double, currencyCode: String = "INR"): String {
         return formatAmount(amount.toBigDecimal(), currencyCode)
     }
 
     /**
-     * Get symbol for a currency code
+     * Get currency symbol
      */
     fun getCurrencySymbol(currencyCode: String): String {
         return CurrencySymbols.getSymbol(currencyCode)
     }
 
     /**
-     * Gets the base currency for a bank using the BankParserFactory
-     * Returns INR as default for unknown banks
+     * Gets bank base currency
      */
     fun getBankBaseCurrency(bankName: String?): String {
         if (bankName == null) return "INR"
 
-        // Try to find a parser that can handle this bank name
         return try {
             val parser = BankParserFactory.getParser(bankName)
             parser?.getCurrency() ?: "INR"
